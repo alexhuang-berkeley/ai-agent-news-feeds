@@ -41,4 +41,4 @@ export OPENAI_API_KEY=your-key
 python agent_ui.py
 ```
 
-The UI opens a chat where the agent explains its purpose, asks for your topics of interest, refines keywords via OpenAI, collects cadence and email settings, and finally confirms before starting the news feed agent.
+The UI opens a chat driven entirely by the OpenAI model. It explains the agent's purpose, helps refine your keywords, gathers cadence and email settings in conversation, then confirms and launches the news feed agent.
