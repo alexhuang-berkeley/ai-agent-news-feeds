@@ -9,7 +9,11 @@ import openai
 from news_agent import main as run_news_agent
 
 CONFIG_FILE = Path("config.json")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+KEY_FILE = Path("openai_key.txt")
+if KEY_FILE.exists():
+    openai.api_key = KEY_FILE.read_text().strip()
+else:
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
 intro = (
     "Hello! I'm your News Feed AI Agent. I can send you regular emails with "

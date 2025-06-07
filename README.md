@@ -32,9 +32,11 @@ The configuration is stored in `config.json`. The agent will run continuously an
 
 ## Browser-Based Interface
 
-Set your `OPENAI_API_KEY` environment variable and launch the conversational UI:
+Save your OpenAI API key in a file named `openai_key.txt` (or set the
+`OPENAI_API_KEY` environment variable) and launch the conversational UI:
 
 ```bash
+# Optionally set the key via environment variable instead of the file
 export OPENAI_API_KEY=your-key
 python agent_ui.py
 ```
