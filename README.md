@@ -5,13 +5,9 @@ This repository contains a simple Python script that emails you the latest news 
 ## Requirements
 
 - Python 3.8+
-- Packages: `feedparser`, `arxiv`, `schedule`, `openai`, `gradio`
 
-Install the required packages:
 
-```bash
-pip install feedparser arxiv schedule openai gradio
-```
+pip install feedparser arxiv schedule "openai>=1" gradio
 
 ## Usage
 
@@ -33,7 +29,9 @@ The configuration is stored in `config.json`. The agent will run continuously an
 ## Browser-Based Interface
 
 Save your OpenAI API key in a file named `openai_key.txt` (or set the
-`OPENAI_API_KEY` environment variable) and launch the conversational UI:
+`OPENAI_API_KEY` environment variable) and launch the conversational UI.
+The UI requires `openai` version 1.x:
+
 
 ```bash
 # Optionally set the key via environment variable instead of the file
@@ -41,4 +39,5 @@ export OPENAI_API_KEY=your-key
 python agent_ui.py
 ```
 
-The UI opens a chat where the agent explains its purpose, asks for your topics of interest, refines keywords via OpenAI, collects cadence and email settings, and finally confirms before starting the news feed agent.
+The UI opens a chat driven entirely by the OpenAI model. It explains the agent's purpose, helps refine your keywords, gathers cadence and email settings in conversation, then confirms and launches the news feed agent.
+

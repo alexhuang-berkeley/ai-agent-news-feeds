@@ -11,32 +11,31 @@ from news_agent import main as run_news_agent
 CONFIG_FILE = Path("config.json")
 KEY_FILE = Path("openai_key.txt")
 if KEY_FILE.exists():
-    openai.api_key = KEY_FILE.read_text().strip()
+    _api_key = KEY_FILE.read_text().strip()
 else:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    _api_key = os.getenv("OPENAI_API_KEY")
 
-intro = (
-    "Hello! I'm your News Feed AI Agent. I can send you regular emails with "
-    "the latest news articles and academic papers based on your interests. "
-    "Let's set things up. What topics are you interested in?"
+client = openai.OpenAI(api_key=_api_key) if _api_key else None
+
+SYSTEM_PROMPT = (
+    "You are a news feed setup assistant. Collect the user's search keywords, "
+    "cadence in minutes, sender email, sender password, recipient email, SMTP "
+    "server and SMTP port. Suggest improved keywords after the user provides "
+    "initial topics. After gathering all details, summarize them and ask for "
+    "yes/no confirmation to start the agent."
 )
 
 
-def refine_keywords(keywords: str) -> str:
-    """Use OpenAI to suggest improved search keywords."""
-    if not openai.api_key:
+def ai_response(messages):
+    """Return the assistant reply for the given chat messages."""
+    if client is None:
         return "OPENAI_API_KEY not set"
-    prompt = (
-        "Suggest refined keywords for searching news and academic papers based on: "
-        f"{keywords}. Provide a comma-separated list of improved keywords."
-    )
-    messages = [
-        {"role": "system", "content": "You help refine search keywords."},
-        {"role": "user", "content": prompt},
-    ]
     try:
-        resp = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
-        return resp.choices[0].message["content"].strip()
+        resp = client.chat.completions.create(
+            model="gpt-3.5-turbo", messages=messages
+        )
+        return resp.choices[0].message.content.strip()
+
     except Exception as e:
         return str(e)
 
@@ -49,87 +48,122 @@ def start_agent(config: dict) -> None:
 
 
 def chat(user_message: str, history: list, state: dict):
+    messages = state.get("messages", [])
+    info = state.get("info", {})
     step = state.get("step", 0)
-    response = ""
+
+    messages.append({"role": "user", "content": user_message})
 
     if step == 0:
-        state["keywords"] = user_message
-        suggestions = refine_keywords(user_message)
-        response = (
-            f"Here are some suggested keywords:\n{suggestions}\n"
-            "You can modify them or keep your original ones."
-        )
+        info["keywords"] = user_message
+        messages.append({
+            "role": "system",
+            "content": (
+                f"The user is interested in: {user_message}. Suggest improved "
+                "keywords as a comma-separated list and ask for confirmation "
+                "or modifications."
+            ),
+        })
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 1
     elif step == 1:
-        # user may provide new keywords or accept suggestions
-        if user_message.strip():
-            state["keywords"] = user_message.strip()
-        response = "How often in minutes should I send updates?"
+        info["keywords"] = user_message.strip()
+        messages.append({"role": "system", "content": "Acknowledge and ask for the update cadence in minutes."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 2
     elif step == 2:
         try:
-            state["cadence_minutes"] = int(user_message)
-            response = "What's the sender email address?"
+            info["cadence_minutes"] = int(user_message)
+            messages.append({"role": "system", "content": "Ask for the sender email address."})
+            response = ai_response(messages)
             state["step"] = 3
         except ValueError:
-            response = "Please provide a number for the cadence in minutes."
+            messages.append({"role": "system", "content": "Inform the user the cadence must be a number."})
+            response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
     elif step == 3:
-        state["sender_email"] = user_message
-        response = "Sender email password (will be stored locally):"
+        info["sender_email"] = user_message
+        messages.append({"role": "system", "content": "Ask for the sender email password. Mention it will be stored locally."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 4
     elif step == 4:
-        state["sender_password"] = user_message
-        response = "Recipient email address:"
+        info["sender_password"] = user_message
+        messages.append({"role": "system", "content": "Ask for the recipient email address."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 5
     elif step == 5:
-        state["recipient_email"] = user_message
-        response = "SMTP server (e.g., smtp.gmail.com):"
+        info["recipient_email"] = user_message
+        messages.append({"role": "system", "content": "Ask for the SMTP server (e.g., smtp.gmail.com)."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 6
     elif step == 6:
-        state["smtp_server"] = user_message
-        response = "SMTP port (e.g., 587):"
+        info["smtp_server"] = user_message
+        messages.append({"role": "system", "content": "Ask for the SMTP port (e.g., 587)."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
         state["step"] = 7
     elif step == 7:
         try:
-            state["smtp_port"] = int(user_message)
+            info["smtp_port"] = int(user_message)
             summary = (
-                "Great! I will use the following settings:\n"
-                f"Keywords: {state['keywords']}\n"
-                f"Cadence: {state['cadence_minutes']} minutes\n"
-                f"Sender: {state['sender_email']}\n"
-                f"Recipient: {state['recipient_email']}\n"
-                f"SMTP: {state['smtp_server']}:{state['smtp_port']}\n"
-                "Type 'yes' to confirm and start the agent, or 'no' to cancel."
+                f"Confirm the following settings:\nKeywords: {info['keywords']}\n"
+                f"Cadence: {info['cadence_minutes']} minutes\n"
+                f"Sender: {info['sender_email']}\n"
+                f"Recipient: {info['recipient_email']}\n"
+                f"SMTP: {info['smtp_server']}:{info['smtp_port']}\n"
+                "Reply yes to start or no to cancel."
             )
-            response = summary
+            messages.append({"role": "system", "content": summary})
+            response = ai_response(messages)
             state["step"] = 8
         except ValueError:
-            response = "Please provide a numeric SMTP port."
+            messages.append({"role": "system", "content": "Tell the user the SMTP port must be numeric."})
+            response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
     elif step == 8:
-        if user_message.lower().startswith("y"):
+        if user_message.strip().lower().startswith("y"):
             start_agent({
-                "keywords": state["keywords"],
-                "cadence_minutes": state["cadence_minutes"],
-                "sender_email": state["sender_email"],
-                "sender_password": state["sender_password"],
-                "recipient_email": state["recipient_email"],
-                "smtp_server": state["smtp_server"],
-                "smtp_port": state["smtp_port"],
+                "keywords": info["keywords"],
+                "cadence_minutes": info["cadence_minutes"],
+                "sender_email": info["sender_email"],
+                "sender_password": info["sender_password"],
+                "recipient_email": info["recipient_email"],
+                "smtp_server": info["smtp_server"],
+                "smtp_port": info["smtp_port"],
             })
-            response = "Agent started with provided configuration."
-            state["step"] = 9
+            messages.append({"role": "system", "content": "Inform the user that the agent has started."})
         else:
-            response = "Setup canceled."
-            state["step"] = 9
+            messages.append({"role": "system", "content": "Inform the user that setup has been canceled."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
+        state["step"] = 9
     else:
-        response = "Setup complete."
+        messages.append({"role": "system", "content": "Politely say the setup is complete."})
+        response = ai_response(messages)
+        messages.append({"role": "assistant", "content": response})
 
     history.append((user_message, response))
+    state.update({"messages": messages, "info": info})
+
     return history, state, ""
 
 
 def init_chat():
-    return [(None, intro)], {"step": 0}, ""
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "Begin setup."},
+    ]
+    first = ai_response(messages)
+    messages.append({"role": "assistant", "content": first})
+    state = {"step": 0, "messages": messages, "info": {}}
+    return [(None, first)], state, ""
+
 
 
 with gr.Blocks() as demo:
