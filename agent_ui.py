@@ -35,6 +35,7 @@ def ai_response(messages):
             model="gpt-3.5-turbo", messages=messages
         )
         return resp.choices[0].message.content.strip()
+
     except Exception as e:
         return str(e)
 
@@ -148,10 +149,12 @@ def chat(user_message: str, history: list, state: dict):
 
     history.append((user_message, response))
     state.update({"messages": messages, "info": info})
+
     return history, state, ""
 
 
 def init_chat():
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": "Begin setup."},
@@ -160,6 +163,7 @@ def init_chat():
     messages.append({"role": "assistant", "content": first})
     state = {"step": 0, "messages": messages, "info": {}}
     return [(None, first)], state, ""
+
 
 
 with gr.Blocks() as demo:
